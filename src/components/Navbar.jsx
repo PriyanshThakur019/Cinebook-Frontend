@@ -1,17 +1,30 @@
 
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   Ticket,
   MapPin,
   UserRound,
   Menu,
   X,
+  LogOut,
 } from "lucide-react";
+import { useAuth } from "../context/useAuth";
 
 function Navbar() {
   const [menuOpen, setMenuOpen] = useState(false);
   const location = useLocation();
+  const navigate = useNavigate();
+  const { user, signOut } = useAuth();
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+      navigate("/", { replace: true });
+    } catch {
+      // Keep the signed-in state if the server did not confirm logout.
+    }
+  };
 
   useEffect(() => {
     if (location.pathname === "/" && location.hash) {
@@ -42,10 +55,20 @@ function Navbar() {
             <span>Pune</span>
           </div>
 
-          <Link to="/login" className="signin-button">
-            <UserRound size={17} />
-            <span>Sign In</span>
-          </Link>
+          {user ? (
+            <>
+              <span className="signed-in-name">{user.name || user.username}</span>
+              <button className="signin-button" onClick={handleSignOut}>
+                <LogOut size={17} />
+                <span>Sign Out</span>
+              </button>
+            </>
+          ) : (
+            <Link to="/login" className="signin-button">
+              <UserRound size={17} />
+              <span>Sign In</span>
+            </Link>
+          )}
 
           <button
             className="mobile-menu-button"

@@ -13,15 +13,21 @@ import {
   ArrowLeft,
 } from "lucide-react";
 
+import { getApiErrorMessage } from "../api/axiosConfig";
+import { registerAccount } from "../api/authApi";
 import "../App.css";
 
 function Register() {
   const navigate = useNavigate();
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
 
   const [formData, setFormData] = useState({
+    username: "",
     fullName: "",
     email: "",
+    age: "",
     mobile: "",
     password: "",
     confirmPassword: "",
@@ -34,16 +40,34 @@ function Register() {
     });
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setErrorMessage("");
 
     if (formData.password !== formData.confirmPassword) {
-      alert("Passwords do not match!");
+      setErrorMessage("Passwords do not match.");
       return;
     }
 
-    // Backend registration will be integrated later.
-    alert("Registration API integration is coming next!");
+    setSubmitting(true);
+    try {
+      await registerAccount({
+        username: formData.username,
+        name: formData.fullName,
+        email: formData.email,
+        age: Number(formData.age),
+        number: formData.mobile,
+        password: formData.password,
+      });
+      navigate("/login", {
+        replace: true,
+        state: { message: "Account created. Sign in with your username and password." },
+      });
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -70,6 +94,23 @@ function Register() {
         </div>
 
         <form onSubmit={handleSubmit} className="auth-form">
+          <label htmlFor="username">Username</label>
+
+          <div className="auth-input-wrapper">
+            <UserRound size={18} />
+            <input
+              id="username"
+              type="text"
+              name="username"
+              placeholder="Choose a username"
+              value={formData.username}
+              onChange={handleChange}
+              minLength={3}
+              maxLength={50}
+              required
+            />
+          </div>
+
           <label htmlFor="fullName">Full name</label>
 
           <div className="auth-input-wrapper">
@@ -81,6 +122,22 @@ function Register() {
               placeholder="Enter your full name"
               value={formData.fullName}
               onChange={handleChange}
+              required
+            />
+          </div>
+
+          <label htmlFor="age">Age</label>
+          <div className="auth-input-wrapper">
+            <UserRound size={18} />
+            <input
+              id="age"
+              type="number"
+              name="age"
+              placeholder="Enter your age"
+              value={formData.age}
+              onChange={handleChange}
+              min={1}
+              max={120}
               required
             />
           </div>
@@ -156,8 +213,10 @@ function Register() {
             />
           </div>
 
-          <button type="submit" className="primary-button auth-submit">
-            Create Account <ArrowRight size={17} />
+          {errorMessage && <p className="auth-message auth-message-error" role="alert">{errorMessage}</p>}
+
+          <button type="submit" className="primary-button auth-submit" disabled={submitting}>
+            {submitting ? "Creating account…" : "Create Account"} <ArrowRight size={17} />
           </button>
         </form>
 

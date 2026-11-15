@@ -1,7 +1,8 @@
 
-import { Link, Routes, Route } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import Navbar from "./components/Navbar";
+import { useAuth } from "./context/useAuth";
 import Home from "./pages/Home";
 import MovieDetails from "./pages/MovieDetails";
 import TheatreSelection from "./pages/TheatreSelection";
@@ -9,6 +10,17 @@ import SeatSelection from "./pages/SeatSelection";
 import Login from "./pages/Login";
 import Register from "./pages/Register";
 import MyBookings from "./pages/MyBookings";
+
+function ProtectedRoute({ children }) {
+  const { user, loading } = useAuth();
+  const location = useLocation();
+
+  if (loading) {
+    return <main className="page-container"><p role="status">Checking sign-in…</p></main>;
+  }
+
+  return user ? children : <Navigate to="/login" replace state={{ from: location }} />;
+}
 
 function App() {
   return (
@@ -19,7 +31,10 @@ function App() {
       <Route path="/seats/:showId" element={<SeatSelection />} />
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
-      <Route path="/my-bookings" element={<MyBookings />} />
+      <Route
+        path="/my-bookings"
+        element={<ProtectedRoute><MyBookings /></ProtectedRoute>}
+      />
       <Route
         path="*"
         element={

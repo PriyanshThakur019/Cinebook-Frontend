@@ -1,202 +1,208 @@
 
-import { useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowLeft,
+  ArrowRight,
   MapPin,
   CalendarDays,
   Clock3,
-  Star,
 } from "lucide-react";
 
+import heroImage from "../assets/hero.png";
+import { getApiErrorMessage } from "../api/axiosConfig";
+import { formatShowDateTime, formatShowTime, getListedShows } from "../api/showApi";
+import { getTheatresForShow } from "../api/theatreApi";
 import Navbar from "../components/Navbar";
-import { movies } from "../data/movies";
 import "../App.css";
-
-const theatres = [
-  {
-    id: 1,
-    name: "PVR Phoenix",
-    location: "Phoenix Marketcity, Viman Nagar",
-    rating: "4.5",
-    formats: ["IMAX", "4K", "Dolby Atmos"],
-    shows: ["10:30 AM", "1:45 PM", "6:30 PM", "9:45 PM"],
-  },
-  {
-    id: 2,
-    name: "INOX Bund Garden",
-    location: "Bund Garden Road, Pune",
-    rating: "4.3",
-    formats: ["4K", "Dolby Atmos"],
-    shows: ["11:00 AM", "2:15 PM", "5:45 PM", "9:15 PM"],
-  },
-  {
-    id: 3,
-    name: "Cinepolis Westend",
-    location: "Westend Mall, Aundh",
-    rating: "4.2",
-    formats: ["4K", "Dolby Atmos"],
-    shows: ["10:15 AM", "1:30 PM", "6:00 PM", "9:30 PM"],
-  },
-];
 
 function TheatreSelection() {
   const { movieId } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [reloadKey, setReloadKey] = useState(0);
+  const [show, setShow] = useState(null);
+  const [theatres, setTheatres] = useState([]);
+  const [requestState, setRequestState] = useState({ status: "loading", error: "" });
 
-  const movie = movies.find(
-    (item) => item.id === Number(movieId)
-  );
+  useEffect(() => {
+    let active = true;
 
-  const dates = Array.from({ length: 5 }, (_, index) => {
-    const date = new Date();
-    date.setDate(date.getDate() + index);
+    async function loadScreening() {
+      setRequestState({ status: "loading", error: "" });
 
-    return {
-      isoDate: `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`,
-      day: date.toLocaleDateString("en-IN", { weekday: "short" }),
-      date: date.getDate(),
-      month: date.toLocaleDateString("en-IN", { month: "short" }),
+      try {
+        const shows = await getListedShows();
+        const matchingShow = shows.find((item) => item.id === Number(movieId));
+
+        if (!active) return;
+
+        if (!matchingShow) {
+          setShow(null);
+          setTheatres([]);
+          setRequestState({ status: "not-found", error: "" });
+          return;
+        }
+
+        setShow(matchingShow);
+
+        if (Date.parse(matchingShow.startsAt) <= Date.now()) {
+          setTheatres([]);
+          setRequestState({ status: "past", error: "" });
+          return;
+        }
+
+        const matchingTheatres = await getTheatresForShow(matchingShow.id, "Pune");
+
+        if (active) {
+          setTheatres(matchingTheatres);
+          setRequestState({ status: "success", error: "" });
+        }
+      } catch (error) {
+        if (active) {
+          setRequestState({ status: "error", error: getApiErrorMessage(error) });
+        }
+      }
+    }
+
+    loadScreening();
+
+    return () => {
+      active = false;
     };
-  });
-  const selectedDateIndex = Math.max(
-    0,
-    dates.findIndex((date) => date.isoDate === searchParams.get("date"))
-  );
+  }, [movieId, reloadKey]);
 
-  if (!movie) {
-    return (
-      <div className="app-shell">
-        <Navbar />
-        <div className="page-container">
-          <h2>Movie not found</h2>
-          <button
-            className="primary-button"
-            onClick={() => navigate("/")}
-          >
-            Back to Home
-          </button>
-        </div>
-      </div>
-    );
-  }
+  const startLabel = show && formatShowDateTime(show.startsAt, {
+    weekday: "short",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  });
 
   return (
     <div className="app-shell">
       <Navbar />
 
       <main className="theatre-page">
-        <button
-          className="back-button"
-          onClick={() => navigate(`/movie/${movie.id}`)}
-        >
-          <ArrowLeft size={17} /> Back to Movie
+        <button className="back-button" onClick={() => navigate(`/movie/${movieId}`)}>
+          <ArrowLeft size={17} /> Back to Screening
         </button>
 
-        <section className="booking-movie-summary">
-          <img src={movie.image} alt={movie.title} />
-
-          <div>
-            <span className="details-label">BOOK YOUR TICKETS</span>
-            <h1>{movie.title}</h1>
-            <p>{movie.genre} · {movie.duration} · {movie.language}</p>
+        {requestState.status === "loading" ? (
+          <p className="api-feedback" role="status">Loading theatre and screening details…</p>
+        ) : requestState.status === "error" ? (
+          <div className="api-feedback api-feedback-error" role="alert">
+            <p>{requestState.error}</p>
+            <button
+              className="secondary-button"
+              onClick={() => setReloadKey((key) => key + 1)}
+            >
+              Try Again
+            </button>
           </div>
-        </section>
-
-        <section className="date-selection">
-          <div className="booking-section-heading">
-            <div>
-              <p className="section-kicker">SELECT A DATE</p>
-              <h2>Choose your date<span>.</span></h2>
-            </div>
-            <CalendarDays size={22} />
+        ) : requestState.status === "not-found" ? (
+          <div className="api-feedback" role="status">
+            <h1>Screening not found</h1>
+            <p>This screening is not listed by the backend.</p>
           </div>
-
-          <div className="date-list">
-            {dates.map((date, index) => (
-              <button
-                key={date.isoDate}
-                className={`date-option ${selectedDateIndex === index ? "selected" : ""}`}
-                onClick={() => {
-                  const updatedParams = new URLSearchParams(searchParams);
-                  updatedParams.set("date", date.isoDate);
-                  setSearchParams(updatedParams, { replace: true });
-                }}
-                aria-pressed={selectedDateIndex === index}
-              >
-                <span>{date.day}</span>
-                <strong>{date.date}</strong>
-                <span>{date.month}</span>
-              </button>
-            ))}
+        ) : requestState.status === "past" ? (
+          <div className="api-feedback" role="status">
+            <h1>This screening has passed</h1>
+            <p>{startLabel || "The scheduled screening time is in the past."}</p>
           </div>
-        </section>
+        ) : (
+          <>
+            <section className="booking-movie-summary">
+              <img src={show.image || heroImage} alt={show.title} />
+              <div>
+                <span className="details-label">SCHEDULED SCREENING</span>
+                <h1>{show.title}</h1>
+                <p>
+                  {show.durationMinutes ? `${show.durationMinutes} min` : "Runtime unavailable"}
+                  {show.host ? ` · ${show.host}` : ""}
+                </p>
+              </div>
+            </section>
 
-        <section className="theatres-section">
-          <div className="booking-section-heading">
-            <div>
-              <p className="section-kicker">CINEMAS NEAR YOU</p>
-              <h2>Select a theatre<span>.</span></h2>
-            </div>
-            <span className="theatre-city">
-              <MapPin size={15} /> Pune
-            </span>
-          </div>
-
-          <div className="theatre-list">
-            {theatres.map((theatre) => (
-              <article className="theatre-card" key={theatre.id}>
-                <div className="theatre-info">
-                  <h3>{theatre.name}</h3>
-
-                  <p className="theatre-location">
-                    <MapPin size={14} />
-                    {theatre.location}
-                  </p>
-
-                  <div className="theatre-tags">
-                    {theatre.formats.map((format) => (
-                      <span key={format}>{format}</span>
-                    ))}
-                  </div>
+            <section className="date-selection">
+              <div className="booking-section-heading">
+                <div>
+                  <p className="section-kicker">SCREENING TIME</p>
+                  <h2>{startLabel || "Schedule unavailable"}</h2>
                 </div>
+                <CalendarDays size={22} />
+              </div>
+              <p className="section-description">
+                Date and time come from the selected backend show and cannot be changed here.
+              </p>
+            </section>
 
-                <div className="theatre-rating">
-                  <Star size={14} fill="currentColor" />
-                  {theatre.rating}
+            <section className="theatres-section">
+              <div className="booking-section-heading">
+                <div>
+                  <p className="section-kicker">ASSIGNED VENUE</p>
+                  <h2>Select a theatre<span>.</span></h2>
                 </div>
+                <span className="theatre-city">
+                  <MapPin size={15} /> Pune
+                </span>
+              </div>
 
-                <div className="theatre-shows">
-                  <p><Clock3 size={14} /> Available showtimes</p>
+              {theatres.length === 0 ? (
+                <p className="api-feedback" role="status">
+                  No active theatre is mapped to this screening.
+                </p>
+              ) : (
+                <div className="theatre-list">
+                  {theatres.map((theatre) => (
+                    <article
+                      className="theatre-card"
+                      key={`${theatre.theatreDetailId}-${theatre.hall.hallDetailsId}`}
+                    >
+                      <div className="theatre-info">
+                        <h3>{theatre.theatreName}</h3>
+                        <p className="theatre-location">
+                          <MapPin size={14} /> {theatre.theatreAddress}
+                        </p>
+                        <div className="theatre-tags">
+                          <span>{theatre.hall.hallName}</span>
+                          <span>{theatre.hall.hallType}</span>
+                          <span>{theatre.hall.hallCapacity} seats</span>
+                        </div>
+                      </div>
 
-                  <div className="showtime-list">
-                    {theatre.shows.map((time, index) => (
-                      <button
-                        key={time}
-                        className="showtime-button"
-                        onClick={() => {
-                          const showId = theatre.id * 100 + index + 1;
-                          const bookingContext = new URLSearchParams({
-                            movieId: String(movie.id),
-                            theatreId: String(theatre.id),
-                            theatre: theatre.name,
-                            location: theatre.location,
-                            date: dates[selectedDateIndex].isoDate,
-                            time,
-                          });
+                      <div className="theatre-shows">
+                        <p><Clock3 size={14} /> {startLabel}</p>
+                        <button
+                          className="showtime-button"
+                          onClick={() => {
+                            const context = new URLSearchParams({
+                              movieId: String(show.id),
+                              movieTitle: show.title,
+                              theatreId: String(theatre.theatreDetailId),
+                              hallId: String(theatre.hall.hallDetailsId),
+                              theatre: theatre.theatreName,
+                              location: theatre.theatreAddress,
+                              date: show.startsAt.slice(0, 10),
+                              time: formatShowTime(show.startsAt) || "Time unavailable",
+                            });
 
-                          navigate(`/seats/${showId}?${bookingContext.toString()}`);
-                        }}
-                      >
-                        {time}
-                      </button>
-                    ))}
-                  </div>
+                            navigate(`/seats/${show.id}?${context.toString()}`);
+                          }}
+                        >
+                          View Seat Layout <ArrowRight size={15} />
+                        </button>
+                      </div>
+                    </article>
+                  ))}
                 </div>
-              </article>
-            ))}
-          </div>
-        </section>
+              )}
+            </section>
+
+            <p className="api-feedback">
+              Seat availability and booking are not provided by the current backend read APIs.
+            </p>
+          </>
+        )}
       </main>
     </div>
   );

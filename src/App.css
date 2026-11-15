@@ -113,6 +113,15 @@
   font-weight: 700;
 }
 
+.signed-in-name {
+  max-width: 150px;
+  overflow: hidden;
+  color: #d5d0dc;
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mobile-menu-button {
   display: none;
 }
@@ -672,6 +681,33 @@
   color: #c38aff;
 }
 
+.api-feedback {
+  margin: 18px 0;
+  padding: 18px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+  color: #aaa3b3;
+  font-size: 13px;
+  line-height: 1.7;
+}
+
+.api-feedback h1,
+.api-feedback h2 {
+  margin: 0 0 8px;
+  color: #f7f5fa;
+  font-family: 'Outfit', sans-serif;
+  font-size: 24px;
+}
+
+.api-feedback p {
+  margin: 0 0 12px;
+}
+
+.api-feedback-error {
+  border-color: rgba(235, 105, 105, 0.35);
+  color: #e9b5b5;
+}
+
 /* ==========================================
    MOVIE DETAILS PAGE
 ========================================== */
@@ -1090,6 +1126,18 @@
   transition: 0.15s;
 }
 
+.layout-seat {
+  width: auto;
+  min-width: 35px;
+  padding: 0 4px;
+  border-color: #53456a;
+  color: #d7d0df;
+  background: #171521;
+  font-size: 9px;
+  cursor: default;
+  white-space: nowrap;
+}
+
 .seat.available:hover {
   border-color: #c38aff;
   transform: translateY(-2px);
@@ -1281,6 +1329,25 @@
 .auth-heading > p:last-child {
   color: #928b9c;
   font-size: 12px;
+}
+
+.auth-message {
+  margin: 0 0 16px;
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.auth-message-error {
+  color: #f0a2a2;
+}
+
+.auth-message-success {
+  color: #a9ddb7;
+}
+
+.forgot-password-disabled {
+  color: #77717e;
+  font-size: 11px;
 }
 
 .pending-booking-context {

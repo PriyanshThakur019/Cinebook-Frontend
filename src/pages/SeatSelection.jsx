@@ -1,193 +1,178 @@
-
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   ArrowLeft,
-  ArrowRight,
-  Armchair,
   CalendarDays,
   Clock3,
   Film,
+  Info,
   MapPin,
   Ticket,
-  Info,
 } from "lucide-react";
 
+import { getApiErrorMessage } from "../api/axiosConfig";
+import { formatShowDate } from "../api/showApi";
+import { getSeatsForHall } from "../api/theatreApi";
 import Navbar from "../components/Navbar";
-import { movies } from "../data/movies";
 import "../App.css";
-
-const ROWS = ["A", "B", "C", "D", "E", "F", "G", "H"];
-const SEATS_PER_ROW = 10;
-
-const bookedSeats = ["A3", "A4", "B7", "C2", "C3", "D8", "E5", "F6"];
 
 function SeatSelection() {
   const { showId } = useParams();
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const hallId = searchParams.get("hallId");
+  const [reloadKey, setReloadKey] = useState(0);
+  const [seats, setSeats] = useState([]);
+  const [requestState, setRequestState] = useState({ status: "loading", error: "" });
 
-  const seatPrice = 250;
-  const movie = movies.find(
-    (item) => item.id === Number(searchParams.get("movieId"))
-  );
-  const selectedDateValue = searchParams.get("date");
-  const selectedDate = selectedDateValue
-    ? new Date(`${selectedDateValue}T00:00:00`)
-    : null;
-  const dateLabel = selectedDate && !Number.isNaN(selectedDate.getTime())
-    ? selectedDate.toLocaleDateString("en-IN", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "Date not selected";
-  const selectedSeats = [...new Set(
-    (searchParams.get("seats") || "")
-      .split(",")
-      .filter((seatId) => {
-        const row = seatId.slice(0, 1);
-        const seatNumber = Number(seatId.slice(1));
+  useEffect(() => {
+    let active = true;
 
-        return (
-          ROWS.includes(row) &&
-          Number.isInteger(seatNumber) &&
-          seatNumber >= 1 &&
-          seatNumber <= SEATS_PER_ROW &&
-          !bookedSeats.includes(seatId)
-        );
-      })
-  )];
+    async function loadSeats() {
+      if (!hallId) {
+        setRequestState({
+          status: "error",
+          error: "The screening URL does not include a hall. Return to the show and choose its theatre.",
+        });
+        return;
+      }
 
-  const toggleSeat = (seatId) => {
-    if (bookedSeats.includes(seatId)) return;
+      setRequestState({ status: "loading", error: "" });
 
-    const updatedSeats = selectedSeats.includes(seatId)
-      ? selectedSeats.filter((seat) => seat !== seatId)
-      : [...selectedSeats, seatId];
-    const updatedParams = new URLSearchParams(searchParams);
+      try {
+        const hallSeats = await getSeatsForHall(hallId);
 
-    if (updatedSeats.length > 0) {
-      updatedParams.set("seats", updatedSeats.join(","));
-    } else {
-      updatedParams.delete("seats");
+        if (active) {
+          setSeats(hallSeats);
+          setRequestState({ status: "success", error: "" });
+        }
+      } catch (error) {
+        if (active) {
+          setRequestState({ status: "error", error: getApiErrorMessage(error) });
+        }
+      }
     }
 
-    setSearchParams(updatedParams, { replace: true });
-  };
+    loadSeats();
 
-  const totalAmount = selectedSeats.length * seatPrice;
+    return () => {
+      active = false;
+    };
+  }, [hallId, reloadKey]);
+
+  const seatRows = useMemo(() => {
+    const groups = new Map();
+
+    for (const seat of seats) {
+      const match = seat.seatNumber?.match(/^([A-Z]+)(\d+)$/);
+      if (!match) continue;
+
+      const [, row, seatNumber] = match;
+      const rowSeats = groups.get(row) || [];
+      rowSeats.push({ ...seat, numericSeatNumber: Number(seatNumber) });
+      groups.set(row, rowSeats);
+    }
+
+    return [...groups.entries()]
+      .sort(([firstRow], [secondRow]) => firstRow.localeCompare(secondRow))
+      .map(([row, rowSeats]) => ({
+        row,
+        seats: rowSeats.sort((firstSeat, secondSeat) =>
+          firstSeat.numericSeatNumber - secondSeat.numericSeatNumber
+        ),
+      }));
+  }, [seats]);
+
+  const dateLabel = formatShowDate(searchParams.get("date"));
+  const displayableSeatCount = seatRows.reduce(
+    (count, row) => count + row.seats.length,
+    0
+  );
 
   return (
     <div className="app-shell">
       <Navbar />
 
       <main className="seat-page">
-        <button
-          className="back-button"
-          onClick={() => navigate(-1)}
-        >
-          <ArrowLeft size={17} /> Back to Shows
+        <button className="back-button" onClick={() => navigate(-1)}>
+          <ArrowLeft size={17} /> Back to Screening
         </button>
 
         <div className="seat-page-heading">
           <div>
-            <p className="section-kicker">ALMOST THERE</p>
-            <h1>Select Your Seats<span>.</span></h1>
-            <p>Choose your preferred seats. This sample selection does not reserve seats.</p>
+            <p className="section-kicker">HALL LAYOUT</p>
+            <h1>Seats for this screening<span>.</span></h1>
+            <p>Seat availability is not included in the current backend API.</p>
           </div>
 
           <div className="show-summary">
-            <span><Film size={16} /> {movie?.title || "Movie not selected"}</span>
-            <span><MapPin size={16} /> {searchParams.get("theatre") || "Theatre not selected"}</span>
-            <span><CalendarDays size={16} /> {dateLabel}</span>
-            <span><Clock3 size={16} /> {searchParams.get("time") || "Showtime not selected"}</span>
-            <span><Ticket size={16} /> Demo show {showId}</span>
+            <span><Film size={16} /> {searchParams.get("movieTitle") || `Show ${showId}`}</span>
+            <span><MapPin size={16} /> {searchParams.get("theatre") || "Theatre unavailable"}</span>
+            <span><CalendarDays size={16} /> {dateLabel || "Date unavailable"}</span>
+            <span><Clock3 size={16} /> {searchParams.get("time") || "Time unavailable"}</span>
+            <span><Ticket size={16} /> Hall {hallId || "unavailable"}</span>
           </div>
         </div>
 
-        <section className="seat-layout">
-          <div className="screen-container">
-            <div className="screen-curve" />
-            <span>SCREEN THIS WAY</span>
+        {requestState.status === "loading" ? (
+          <p className="api-feedback" role="status">Loading hall seats…</p>
+        ) : requestState.status === "error" ? (
+          <div className="api-feedback api-feedback-error" role="alert">
+            <p>{requestState.error}</p>
+            {hallId && (
+              <button
+                className="secondary-button"
+                onClick={() => setReloadKey((key) => key + 1)}
+              >
+                Try Again
+              </button>
+            )}
           </div>
-
-          <div className="seat-grid">
-            {ROWS.map((row) => (
-              <div className="seat-row" key={row}>
-                <span className="row-label">{row}</span>
-
-                {Array.from(
-                  { length: SEATS_PER_ROW },
-                  (_, index) => {
-                    const seatId = `${row}${index + 1}`;
-                    const isBooked = bookedSeats.includes(seatId);
-                    const isSelected = selectedSeats.includes(seatId);
-
-                    return (
-                      <button
-                        key={seatId}
-                        className={`seat ${
-                          isBooked
-                            ? "booked"
-                            : isSelected
-                              ? "selected"
-                              : "available"
-                        }`}
-                        disabled={isBooked}
-                        onClick={() => toggleSeat(seatId)}
-                        title={seatId}
-                        aria-label={`Seat ${seatId}`}
-                      >
-                        <Armchair size={17} />
-                      </button>
-                    );
-                  }
-                )}
-
-                <span className="row-label">{row}</span>
+        ) : (
+          <>
+            <section className="seat-layout" aria-label="Read-only hall seat layout">
+              <div className="screen-container">
+                <div className="screen-curve" />
+                <span>SCREEN THIS WAY</span>
               </div>
-            ))}
-          </div>
 
-          <div className="seat-legend">
-            <div><span className="legend-seat available-legend" /> Available</div>
-            <div><span className="legend-seat selected-legend" /> Selected</div>
-            <div><span className="legend-seat booked-legend" /> Booked</div>
-          </div>
+              {seatRows.length > 0 ? (
+                <div className="seat-grid">
+                  {seatRows.map(({ row, seats: rowSeats }) => (
+                    <div className="seat-row" key={row}>
+                      <span className="row-label">{row}</span>
+                      {rowSeats.map((seat) => (
+                        <span
+                          className="seat layout-seat"
+                          key={seat.hallSeatId}
+                          title={`${seat.seatType || "Seat"}; availability unknown`}
+                          aria-label={`${seat.seatNumber}; availability unknown`}
+                        >
+                          {seat.seatNumber}
+                        </span>
+                      ))}
+                      <span className="row-label">{row}</span>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="api-feedback" role="status">
+                  No displayable active seats were returned for this hall.
+                </p>
+              )}
 
-          <div className="seat-price-info">
-            <Info size={15} />
-            Sample price: ₹{seatPrice} per seat. Seats are not reserved.
-          </div>
-        </section>
+              <div className="seat-price-info">
+                <Info size={15} />
+                {displayableSeatCount} of {seats.length} active seats shown. Availability and prices are not provided.
+                {displayableSeatCount < seats.length && " Unsupported seat labels are omitted from this layout."}
+              </div>
+            </section>
 
-        <section className="booking-summary">
-          <div>
-            <p className="summary-label">SELECTED SEATS</p>
-            <h3>
-              {selectedSeats.length > 0
-                ? selectedSeats.join(", ")
-                : "No seats selected"}
-            </h3>
-          </div>
-
-          <div className="summary-total">
-            <p className="summary-label">TOTAL AMOUNT</p>
-            <h2>₹{totalAmount}</h2>
-          </div>
-
-          <button
-            className="primary-button"
-            disabled={selectedSeats.length === 0}
-            onClick={() => navigate({
-              pathname: "/login",
-              search: searchParams.toString(),
-            })}
-          >
-            Continue <ArrowRight size={17} />
-          </button>
-        </section>
+            <div className="api-feedback">
+              This layout is read-only. Booking is disabled until the backend can report and reserve seats per show.
+            </div>
+          </>
+        )}
       </main>
     </div>
   );

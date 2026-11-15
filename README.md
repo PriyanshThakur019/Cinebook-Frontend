@@ -1,16 +1,18 @@
-# React + Vite
+# Cinebook Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some Oxlint rules.
+Customer-facing Cinebook UI built with React, Vite, React Router, Axios, and plain CSS.
 
-Currently, two official plugins are available:
+## Run locally
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+```sh
+npm install
+npm run dev
+```
 
-## React Compiler
+## Hosted backend
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+The shared Axios client defaults to `/api`. During local development, the Vite server proxies `/api/*` to `http://34.58.239.191:8080/*`, avoiding the hosted server's current missing CORS headers for browser requests.
 
-## Expanding the Oxlint configuration
+The Vite development proxy does not run in a production build. Production must use a same-origin reverse proxy or configure the backend for the deployed UI's CORS origin. Use HTTPS before sending passwords or personal booking data; the hosted URL is currently HTTP.
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and Oxlint's TypeScript related rules in your project.
+The customer UI currently reads listed shows, theatres, hall mappings, hall details, and hall seats. Show and theatre data comes from the hosted backend; seat layout is read-only because the API does not expose show-specific seat availability. Login, registration, booking, and booking history are not wired until the backend provides secure authentication and booking guarantees.

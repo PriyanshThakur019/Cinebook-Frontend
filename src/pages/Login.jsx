@@ -1,6 +1,6 @@
 
 import { useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import {
   Ticket,
   UserRound,
@@ -14,36 +14,30 @@ import {
   MapPin,
 } from "lucide-react";
 
-import { movies } from "../data/movies";
+import { formatShowDate } from "../api/showApi";
+import { getApiErrorMessage } from "../api/axiosConfig";
+import { useAuth } from "../context/useAuth";
 import "../App.css";
 
 function Login() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
+  const { signIn } = useAuth();
 
   const [showPassword, setShowPassword] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const successMessage = location.state?.message || "";
   const [formData, setFormData] = useState({
     username: "",
     password: "",
   });
-  const movie = movies.find(
-    (item) => item.id === Number(searchParams.get("movieId"))
-  );
+  const movieTitle = searchParams.get("movieTitle");
   const selectedSeats = (searchParams.get("seats") || "")
     .split(",")
     .filter(Boolean);
-  const bookingDateValue = searchParams.get("date");
-  const bookingDate = bookingDateValue
-    ? new Date(`${bookingDateValue}T00:00:00`)
-    : null;
-  const bookingDateLabel = bookingDate && !Number.isNaN(bookingDate.getTime())
-    ? bookingDate.toLocaleDateString("en-IN", {
-        weekday: "short",
-        day: "numeric",
-        month: "short",
-        year: "numeric",
-      })
-    : "Date not selected";
+  const bookingDateLabel = formatShowDate(searchParams.get("date")) || "Date not selected";
 
   const handleChange = (event) => {
     setFormData({
@@ -52,11 +46,19 @@ function Login() {
     });
   };
 
-  const handleSubmit = (event) => {
+  const handleSubmit = async (event) => {
     event.preventDefault();
+    setSubmitting(true);
+    setErrorMessage("");
 
-    // Backend authentication will be integrated later.
-    alert("Login API integration is coming next!");
+    try {
+      await signIn(formData.username, formData.password);
+      navigate(location.state?.from?.pathname || "/", { replace: true });
+    } catch (error) {
+      setErrorMessage(getApiErrorMessage(error));
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -82,24 +84,29 @@ function Login() {
           <p>Continue your cinematic journey.</p>
         </div>
 
-        {selectedSeats.length > 0 && (
+        {movieTitle && (
           <section className="pending-booking-context" aria-label="Pending booking selection">
             <div className="pending-booking-title">
               <p className="section-kicker">YOUR SELECTION</p>
-              <h2>{movie?.title || "Movie selection"}</h2>
+              <h2>{movieTitle}</h2>
             </div>
             <div className="pending-booking-details">
               <span><MapPin size={14} /> {searchParams.get("theatre") || "Theatre not selected"}</span>
               <span><CalendarDays size={14} /> {bookingDateLabel}</span>
               <span><Clock3 size={14} /> {searchParams.get("time") || "Showtime not selected"}</span>
-              <span>Seats: {selectedSeats.join(", ")}</span>
-              <span>Estimated total: ₹{selectedSeats.length * 250}</span>
+              {selectedSeats.length > 0 && <span>Seats: {selectedSeats.join(", ")}</span>}
+              {selectedSeats.length > 0 && (
+                <span>Estimated sample total: ₹{selectedSeats.length * 250}</span>
+              )}
             </div>
             <p className="pending-booking-note">
-              These sample selections are not reserved. Sign-in and booking are not connected yet.
+              This screening context is informational. Seat availability and booking are not connected yet.
             </p>
           </section>
         )}
+
+        {successMessage && <p className="auth-message auth-message-success" role="status">{successMessage}</p>}
+        {errorMessage && <p className="auth-message auth-message-error" role="alert">{errorMessage}</p>}
 
         <form onSubmit={handleSubmit} className="auth-form">
           <label htmlFor="username">Username</label>
@@ -142,18 +149,11 @@ function Login() {
           </div>
 
           <div className="auth-options">
-            <label className="remember-option">
-              <input type="checkbox" />
-              Remember me
-            </label>
-
-            <button type="button" className="forgot-password">
-              Forgot password?
-            </button>
+            <span className="forgot-password-disabled">Password reset coming later</span>
           </div>
 
-          <button type="submit" className="primary-button auth-submit">
-            Sign In <ArrowRight size={17} />
+          <button type="submit" className="primary-button auth-submit" disabled={submitting}>
+            {submitting ? "Signing in…" : "Sign In"} <ArrowRight size={17} />
           </button>
         </form>
 
